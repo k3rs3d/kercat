@@ -1,0 +1,10 @@
+# Compiled files
+/target/
+
+# Backup files created by editors
+*~
+*.swp
+
+# IDE files
+.idea/
+.vscode/
