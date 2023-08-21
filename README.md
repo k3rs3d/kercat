@@ -1,27 +1,45 @@
-# Kercat: Tribute to Netcat in Rust
+# Kercat
+
+A tribute to Netcat in Rust
 
 ## Status: Work-in-Progress (WIP)
 
-Kercat is currently in a very early stage of development. The primary goal of this project is to replicate the functionality of Netcat using Rust.
+Kercat is currently in a very early stage of development. 
 
 While the core objective is to mirror Netcat's main capabilities, Kercat may eventually include a few additional features or unique touches.
 
 ## Purpose
 
-This project is more of a learning exercise rather than an attempt to create a superior tool to Netcat. I'm building this to explore networking concepts and learn the Rust language.
+The goal of this project is to replicate the functionality of Netcat using Rust. It's more of a learning exercise rather than an attempt to create a superior tool to Netcat. 
+
+In other words, Kercat is not intended to replace professional-grade networking tools. It is designed as an educational project and should be used with that understanding in mind. I'm just building this to explore networking concepts and learn the Rust language.
 
 ## Current Features
 
-- Command-line interface for launching client and server ("listen") modes
-- Basic logging to a file
-- Placeholder structure for the eventual client and server modules
+- Command-line parameters for launching client and server ("listen") modes
+- Logging to a file
+- Robust error handling
+- Makes use of the `async_std` crate to perform non-blocking IO operations.
 
-### Planned Features
 
-- Full TCP/UDP client and server functionality
-- Time delay interval feature
-- Additional unique modes or options (e.g., Zero I/O mode for port scanning)
-- More robust error handling and logging
+## Planned Features
+
+- UDP support
+- Time delay interval/disconnect feature
+- Zero I/O mode for port scanning
+- Command execution / reverse shell functionality
+
+## Usage
+
+Usage is meant to be similar to Netcat's. 
+
+Run in client mode by providing a host and port:
+
+`kercat <host> <port>`
+
+Run in "listen" mode with the `-l` flag and a port:
+
+`kercat -l <port>`
 
 ## Prerequisites
 
