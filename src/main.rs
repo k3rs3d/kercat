@@ -149,7 +149,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match args {
         Mode::Server { port } => {
             info!("Server mode on port {}", port);
-            server::start_server(&port)?;
+            async_std::task::block_on(server::start_server(&port))?;
         }
         Mode::Client { host, port } => {
             info!("Client mode, connecting to {} on port {}", host, port);
