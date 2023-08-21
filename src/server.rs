@@ -2,10 +2,11 @@ use async_std::io; // Import Write for flush
 use async_std::net::TcpListener;
 use async_std::prelude::*;
 use log::info;
+use crate::Config;
 
-pub async fn start_server(port: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let listener = TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
-    info!("Server started, listening on port {}", port);
+pub async fn start_server(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", config.port)).await?;
+    info!("Server started, listening on port {}", config.port);
 
     // Accept connections and process them concurrently
     let mut incoming = listener.incoming();

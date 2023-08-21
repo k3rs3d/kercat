@@ -2,12 +2,13 @@ use log::{error, info};
 use async_std::io;
 use async_std::net::TcpStream;
 use async_std::prelude::*;
+use crate::Config;
 
-pub async fn start_client(host: &str, port: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let address = format!("{}:{}", host, port);
+pub async fn start_client(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    let address = format!("{}:{}", config.host, config.port);
 
     // Log the connection initiation
-    info!("Connecting to {}:{}", host, port);
+    info!("Connecting to {}:{}", config.host, config.port);
 
     // Connect to the server asynchronously and log an error if it fails
     let mut stream = TcpStream::connect(&address)

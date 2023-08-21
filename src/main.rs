@@ -9,13 +9,21 @@ mod server;
 
 // Define the operating mode
 enum Mode {
-    Server { port: String },
-    Client { host: String, port: String },
+    Client,
+    Server,
+}
+
+pub struct Config {
+    host: String,
+    port: String,
+    input_buffer_size: usize,
+    output_buffer_size: usize,
+    // More in the future...
 }
 
 // Parse command-line arguments to determine the operating mode & other parameters.
 // Returns either the parsed mode or an error.
-fn parse_args() -> Result<Mode, Box<dyn std::error::Error>> {
+fn parse_args() -> Result<(Mode, Config), Box<dyn std::error::Error>> {
     let matches = Command::new("kercat")
         .arg(
             Arg::new("listen")
@@ -28,14 +36,13 @@ fn parse_args() -> Result<Mode, Box<dyn std::error::Error>> {
             .short('z')
             .long("zero-io")
             .conflicts_with("listen")
-            .help(
-            "'Zero I/O mode' used for port scanning (no data transfer). Incompatible with -l.",
+            .help("'Zero I/O mode' used for port scanning (no data transfer). Incompatible with -l.",
         )) // TODO: -z mode
         .arg(
-            Arg::with_name("log")
+            Arg::new("log-file-path")
                 .long("log")
                 .value_name("FILE")
-                .help("Sets a custom log file")
+                .help("Records all activity into a specified log file")
                 .takes_value(true),
         )
         .arg(
@@ -53,6 +60,24 @@ fn parse_args() -> Result<Mode, Box<dyn std::error::Error>> {
                 .value_name("PORT")
                 .takes_value(true)
                 .help("The port number to use."),
+        )
+        .arg(
+            Arg::new("input-buffer")
+                .short('I')
+                .long("in-buffer")
+                .value_name("SIZE")
+                .takes_value(true)
+                .default_value("0")
+                .help("Sets the input buffer size. Application will quit after receiving this much data."),
+        )
+        .arg(
+            Arg::new("output-buffer")
+                .short('O')
+                .long("out-buffer")
+                .value_name("SIZE")
+                .takes_value(true)
+                .default_value("0")
+                .help("Sets the output buffer size. Application will quit after sending this much data."),
         )
         .arg(
             Arg::new("extra_1")
@@ -74,8 +99,13 @@ fn parse_args() -> Result<Mode, Box<dyn std::error::Error>> {
 
     // DEBUG ?
     // Configure the logger based on provided log file path, if any
-    let log_file_path = matches.value_of("log");
-    configure_logger(log_file_path)?;
+    let log_file_path = matches.value_of("log-file-path").map(|s| s.to_string());
+    configure_logger(&log_file_path)?;
+
+    // Parse the buffer sizes, using default values if not specified
+    // Since default values are provided in clap, these unwraps are safe
+    let input_buffer_size: usize = matches.value_of("input-buffer").unwrap().parse().unwrap();
+    let output_buffer_size: usize = matches.value_of("output-buffer").unwrap().parse().unwrap();
 
     // We'll retrieve the "extra" positional arguments here
     let extra_1 = matches.value_of("extra_1").map(|s| s.to_string());
@@ -101,17 +131,26 @@ fn parse_args() -> Result<Mode, Box<dyn std::error::Error>> {
     // Provide a default port if still missing
     let port = port.unwrap_or_else(|| "8000".to_string()); // Default 8000
 
-    // Determine the operating mode
-    if matches.is_present("listen") {
-        Ok(Mode::Server { port })
-    } else {
-        Ok(Mode::Client { host, port })
-    }    
+    // Build the Config struct
+    let config = Config {
+        host,
+        port,
+        input_buffer_size,
+        output_buffer_size,
+        // + other fields?
+    };
 
-    //result
+    // Determine the operating mode
+    let mode = if matches.is_present("listen") {
+        Mode::Server
+    } else {
+        Mode::Client
+    };
+
+    Ok((mode, config))
 }
 
-fn configure_logger(log_file_path: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+fn configure_logger(log_file_path: &Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     let mut binding = Builder::from_default_env();
     let builder = binding
         .format(|buf, record| {
@@ -131,29 +170,30 @@ fn configure_logger(log_file_path: Option<&str>) -> Result<(), Box<dyn std::erro
         Some(path) => {
             let file = File::create(path)?;
             builder.target(Target::Pipe(Box::new(file)));
-        },
+        }
         None => {
-            // If no filepath, disable logging by setting the level filter to Off
             builder.filter(None, LevelFilter::Off);
-        },
+        }
     }
 
     builder.init();
     Ok(())
 }
 
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = parse_args()?;
+    let (mode, config) = parse_args()?;
 
-    match args {
-        Mode::Server { port } => {
-            info!("Server mode on port {}", port);
-            async_std::task::block_on(server::start_server(&port))?;
+    match mode {
+        Mode::Server => {
+            info!("Server mode; listening on port {}", config.port);
+            async_std::task::block_on(server::start_server(&config))?;
         }
-        Mode::Client { host, port } => {
-            info!("Client mode, connecting to {} on port {}", host, port);
-            async_std::task::block_on(client::start_client(&host, &port))?;
+        Mode::Client => {
+            info!(
+                "Client mode; connecting to {} on port {}",
+                config.host, config.port
+            );
+            async_std::task::block_on(client::start_client(&config))?;
         }
     }
 
