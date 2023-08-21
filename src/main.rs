@@ -1,6 +1,6 @@
 use clap::{Arg, Command};
 use env_logger::{Builder, Target, WriteStyle};
-use log::LevelFilter;
+use log::{info, LevelFilter};
 use std::fs::File;
 use std::io::Write;
 
@@ -148,12 +148,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match args {
         Mode::Server { port } => {
-            println!("Server mode on port {}", port);
+            info!("Server mode on port {}", port);
             server::start_server(&port)?;
         }
         Mode::Client { host, port } => {
-            println!("Client mode, connecting to {} on port {}", host, port);
-            client::start_client(&host, &port)?;
+            info!("Client mode, connecting to {} on port {}", host, port);
+            async_std::task::block_on(client::start_client(&host, &port))?;
         }
     }
 

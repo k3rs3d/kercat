@@ -1,5 +1,5 @@
+use std::io::{self, Read, Write}; // Import Write for flush
 use std::net::TcpListener;
-use std::io::Read;
 use log::{info,debug};
 
 pub fn start_server(port: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -22,6 +22,7 @@ pub fn start_server(port: &str) -> Result<(), Box<dyn std::error::Error>> {
 
             debug!("Received {} bytes from {}", bytes_read, stream.peer_addr()?);
             print!("{}", String::from_utf8_lossy(&buffer[..bytes_read]));
+            io::stdout().flush()?; // Flush the buffer immediately
         }
     }
 
