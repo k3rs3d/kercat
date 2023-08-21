@@ -9,3 +9,6 @@
 .idea/
 .vscode/
 .vs/
+
+# Debug files
+log.txt
