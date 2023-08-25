@@ -3,12 +3,13 @@ use std::error::Error as StdError;
 use async_std::io;
 use std::sync::mpsc;
 
-// SessionError is the custom error type 
+// Custom result type definition
+pub type SessionResult<T> = Result<T, SessionError>;
+
+// SessionError serves as the error type for session management
 #[derive(Debug)]
 pub enum SessionError {
-    // IoError wraps async I/O errors (for network & file operations)
-    IoError(io::Error),
-    // ChannelRecvError, of course, handles errors when receiving from channels
+    IoError(io::Error), // IoError wraps async I/O errors (for network & file operations)
     ChannelRecvError(mpsc::RecvError),
     // + Other error types?
     // Custom error serves as a catch-all
@@ -18,12 +19,12 @@ pub enum SessionError {
 // Implement the StdError trait to ensure compatibility with 
 // standard error handling mechanisms (e.g. "?")
 impl StdError for SessionError {
-    // Implement source to return underlying error type
+    // Implementing source() allows error-chaining
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             SessionError::IoError(err) => Some(err),
             SessionError::ChannelRecvError(err) => Some(err),
-            // For custom/nonstandard errors, return None:
+            // For custom errors where an underlying source is absent, return None.
             _ => None,
         }
     }
@@ -41,7 +42,7 @@ impl fmt::Display for SessionError {
 }
 
 // Implement From traits:
-// Conversion from io::Error
+// Conversion from io::Error unifies error handling for I/O-related tasks
 impl From<io::Error> for SessionError {
     fn from(err: io::Error) -> Self {
         SessionError::IoError(err)
@@ -75,3 +76,5 @@ impl From<String> for SessionError {
         SessionError::Custom(err)
     }
 }
+
+

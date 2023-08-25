@@ -5,14 +5,14 @@ use async_std::task;
 use std::sync::Arc;
 
 use crate::Config;
-use crate::errors::SessionError;
+use crate::errors::{SessionError,SessionResult};
 
 pub struct Connection {
     stream: TcpStream,
 }
 
 impl Connection {
-    pub async fn from_config(config: &Config) -> Result<Self, SessionError> { // Replace Box<dyn Error> with SessionError
+    pub async fn from_config(config: &Config) -> SessionResult<Self> { 
         let config_arc = Arc::new(config.clone());
         if config.listen {
             Self::listen(config_arc).await
@@ -27,7 +27,7 @@ impl Connection {
         }
     }
 
-    pub async fn listen(config: Arc<Config>) -> Result<Self, SessionError> {
+    pub async fn listen(config: Arc<Config>) -> SessionResult<Self> {
         let address = format!("{}:{}", config.host, config.port);
         info!("Listening on {}", address);
         let listener = TcpListener::bind(&address).await.map_err(SessionError::from)?;
@@ -59,7 +59,7 @@ impl Connection {
         }
     }
 
-    pub async fn receive_data(&mut self) -> Result<String, SessionError> {
+    pub async fn receive_data(&mut self) -> SessionResult<String> {
         info!("Receiving data...");
         let mut buffer = [0u8; 1024];
         let bytes_read = self.stream.read(&mut buffer).await.map_err(SessionError::from)?;
@@ -74,7 +74,7 @@ impl Connection {
         Ok(received.to_string())
     }
 
-    pub async fn send_data(&mut self, data: &[u8]) -> Result<(), SessionError> {
+    pub async fn send_data(&mut self, data: &[u8]) -> SessionResult<()> {
         info!("Sending data...");
         self.stream.write_all(data).await.map_err(SessionError::from)?;
         info!("Data written to stream");
@@ -83,7 +83,7 @@ impl Connection {
         Ok(())
     }
 
-    pub async fn close(&mut self) -> Result<(), SessionError> {
+    pub async fn close(&mut self) -> SessionResult<()> {
         info!("Closing connection...");
         self.stream.shutdown(std::net::Shutdown::Both).map_err(SessionError::from)?;
         Ok(())
