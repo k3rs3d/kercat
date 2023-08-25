@@ -7,6 +7,7 @@ use async_std::task;
 
 mod session;
 mod connection;
+mod errors;
 
 #[derive(Debug, Clone)]
 pub struct Config {

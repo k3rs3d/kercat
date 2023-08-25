@@ -1,5 +1,3 @@
-use crate::connection::Connection;
-use crate::Config;
 use async_std::channel;
 use async_std::io::{self, prelude::*};
 use async_std::sync::Mutex;
@@ -9,11 +7,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use futures::future::FutureExt;
 
+use crate::errors::SessionError;
+use crate::connection::Connection;
+use crate::Config;
+
 async fn network_task(
     connection: Arc<Mutex<Connection>>,
     input_receiver: channel::Receiver<String>,
     should_exit: Arc<AtomicBool>,
-) -> Result<(), String> {
+) -> Result<(), SessionError> {
     loop {
         // Concurrently await input and network reception.
         futures::select! {
@@ -21,10 +23,9 @@ async fn network_task(
                 if let Ok(input) = input_result {
                     info!("Received input from user, attempting to send data.");
                     let mut connection = connection.lock().await;
-                    match connection.send_data(input.as_bytes()).await {
-                        Ok(_) => info!("User input sent to remote connection"),
-                        Err(e) => error!("Error sending data: {:?}", e),
-                    };
+                    connection.send_data(input.as_bytes()).await
+                        .map_err(SessionError::from)?;
+                    info!("User input sent to remote connection");
                 }
             },
             received_result = async {
@@ -37,15 +38,7 @@ async fn network_task(
                         info!("Received data: {}", data); // Logging received data
                     },
                     Err(e) => {
-                        if let Some(io_err) = e.downcast_ref::<std::io::Error>() {
-                            if io_err.kind() == std::io::ErrorKind::ConnectionAborted {
-                                info!("Connection closed by the server, exiting network task");
-                                should_exit.store(true, Ordering::SeqCst); // Signal to exit
-                                break;
-                            }
-                        }
-                        error!("Error receiving data: {:?}", e);
-                        break;
+                        return Err(SessionError::from(e));
                     }
                 };
             },
@@ -60,7 +53,7 @@ async fn network_task(
 }
 
 
-pub async fn start_session(config: &Config) -> Result<(), String> {
+pub async fn start_session(config: &Config) -> Result<(), SessionError> {
     info!("Starting session with configuration: {:?}", config);
 
     let should_exit = Arc::new(AtomicBool::new(false));
@@ -118,13 +111,17 @@ pub async fn start_session(config: &Config) -> Result<(), String> {
     // TODO: Close the connection with connection.close
 
     input_task.await;
+
     info!("Session ended successfully.");
     
     if should_exit.load(Ordering::SeqCst) {
-        return Err("Connection closed by the server, session terminated.".to_string());
+        return Err(SessionError::Custom("Connection closed by the server, session terminated.".to_string())); // Custom error
     }
     
-    network_result;
+    match network_result {
+        Ok(_) => info!("Network task completed successfully."),
+        Err(err) => error!("Network task failed with error: {:?}", err),
+    }    
 
-    Ok::<(), String>(())
+    Ok(())
 }
