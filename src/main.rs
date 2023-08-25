@@ -1,29 +1,26 @@
 use clap::{Arg, Command};
 use env_logger::{Builder, Target, WriteStyle};
-use log::{info, LevelFilter};
+use log::{info, error, LevelFilter};
 use std::fs::File;
 use std::io::Write;
+use async_std::task;
 
-mod client;
-mod server;
+mod session;
+mod connection;
 
-// Define the operating mode
-enum Mode {
-    Client,
-    Server,
-}
-
+#[derive(Debug, Clone)]
 pub struct Config {
     host: String,
     port: String,
-    input_buffer_size: usize,
-    output_buffer_size: usize,
+    listen: bool, 
+    //input_buffer_size: usize,
+    //output_buffer_size: usize,
     // More in the future...
 }
 
 // Parse command-line arguments to determine the operating mode & other parameters.
 // Returns either the parsed mode or an error.
-fn parse_args() -> Result<(Mode, Config), Box<dyn std::error::Error>> {
+fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
     let matches = Command::new("kercat")
         .arg(
             Arg::new("listen")
@@ -97,6 +94,9 @@ fn parse_args() -> Result<(Mode, Config), Box<dyn std::error::Error>> {
         )
         .get_matches();
 
+    // Determine the operating mode
+    let listen = matches.is_present("listen");
+
     // DEBUG ?
     // Configure the logger based on provided log file path, if any
     let log_file_path = matches.value_of("log-file-path").map(|s| s.to_string());
@@ -104,8 +104,8 @@ fn parse_args() -> Result<(Mode, Config), Box<dyn std::error::Error>> {
 
     // Parse the buffer sizes, using default values if not specified
     // Since default values are provided in clap, these unwraps are safe
-    let input_buffer_size: usize = matches.value_of("input-buffer").unwrap().parse().unwrap();
-    let output_buffer_size: usize = matches.value_of("output-buffer").unwrap().parse().unwrap();
+    //let input_buffer_size: usize = matches.value_of("input-buffer").unwrap().parse().unwrap();
+    //let output_buffer_size: usize = matches.value_of("output-buffer").unwrap().parse().unwrap();
 
     // We'll retrieve the "extra" positional arguments here
     let extra_1 = matches.value_of("extra_1").map(|s| s.to_string());
@@ -135,19 +135,13 @@ fn parse_args() -> Result<(Mode, Config), Box<dyn std::error::Error>> {
     let config = Config {
         host,
         port,
-        input_buffer_size,
-        output_buffer_size,
+        listen,
+        //input_buffer_size,
+        //output_buffer_size,
         // + other fields?
     };
 
-    // Determine the operating mode
-    let mode = if matches.is_present("listen") {
-        Mode::Server
-    } else {
-        Mode::Client
-    };
-
-    Ok((mode, config))
+    Ok(config)
 }
 
 fn configure_logger(log_file_path: &Option<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -181,20 +175,16 @@ fn configure_logger(log_file_path: &Option<String>) -> Result<(), Box<dyn std::e
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (mode, config) = parse_args()?;
+    // Parse command-line arguments to build Config struct
+    let config = parse_args()?;
 
-    match mode {
-        Mode::Server => {
-            info!("Server mode; listening on port {}", config.port);
-            async_std::task::block_on(server::start_server(&config))?;
-        }
-        Mode::Client => {
-            info!(
-                "Client mode; connecting to {} on port {}",
-                config.host, config.port
-            );
-            async_std::task::block_on(client::start_client(&config))?;
-        }
+    info!("Starting session with config: {:?}", config);
+
+    // Start the session; block_on is used to run the async function synchronously
+    let result = task::block_on(session::start_session(&config));
+    match result {
+        Ok(_) => info!("Session ended successfully"),
+        Err(e) => error!("An error occurred during the session: {}", e),
     }
 
     Ok(())
