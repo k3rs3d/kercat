@@ -4,16 +4,18 @@ use async_std::{
     io::prelude::*,
     net::{TcpListener, TcpStream},
 };
+use std::sync::Arc;
 use log::{error, info};
 
 pub struct Connection {
     stream: TcpStream,
+    config: Arc<Config>,
 }
 
 impl Connection {
-    pub async fn from_config(config: &Config) -> SessionResult<Self> {
+    pub async fn from_config(config: Arc<Config>) -> SessionResult<Self> {
         if config.listen {
-            Self::listen(&config).await
+            Self::listen(config).await
         } else {
             let address = format!("{}:{}", config.host, config.port);
             info!("Connecting to {}", address);
@@ -23,11 +25,11 @@ impl Connection {
             info!("Connected to {}", address);
             stream.set_nodelay(true).map_err(SessionError::from)?;
 
-            Ok(Self { stream })
+            Ok(Self { stream, config }) 
         }
     }
 
-    pub async fn listen(config: &Config) -> SessionResult<Self> {
+    pub async fn listen(config: Arc<Config>) -> SessionResult<Self> {
         let address = format!("{}:{}", config.host, config.port);
         info!("Listening on {}", address);
         let listener = TcpListener::bind(&address)
@@ -37,28 +39,33 @@ impl Connection {
         let (stream, addr) = listener.accept().await.map_err(SessionError::from)?;
         info!("Accepted connection from {}", addr);
         stream.set_nodelay(true).map_err(SessionError::from)?;
-        Ok(Connection { stream })
+        Ok(Connection { stream, config })
     }    
 
     pub async fn receive_data(&mut self) -> SessionResult<String> {
         info!("Receiving data...");
-        let mut buffer = [0u8; 1024];
-        let bytes_read = self
-            .stream
-            .read(&mut buffer)
-            .await
-            .map_err(SessionError::from)?;
-
-        if bytes_read == 0 {
-            error!("Connection closed by the peer");
-            return Err(SessionError::Custom("Connection closed by peer".into()));
+        let mut buffer = vec![0u8; self.config.input_buffer_size];
+        let mut total_data = Vec::new();
+    
+        loop {
+            let bytes_read = self.stream.read(&mut buffer).await.map_err(SessionError::from)?;
+            
+            if bytes_read == 0 {
+                error!("Connection closed by the peer");
+                return Err(SessionError::Custom("Connection closed by peer".into()));
+            }
+            
+            total_data.extend_from_slice(&buffer[..bytes_read]);
+            
+            // Check for message boundary, in this case, a newline character.
+            if let Some(pos) = total_data.iter().position(|&b| b == b'\n') {
+                let received = std::str::from_utf8(&total_data[..pos])
+                    .map_err(|e| SessionError::Custom(e.to_string()))?;
+                return Ok(received.to_string());
+            }
         }
-
-        let received = std::str::from_utf8(&buffer[..bytes_read])
-            .map_err(|e| SessionError::Custom(e.to_string()))?;
-        info!("Received: {}", received);
-        Ok(received.to_string())
     }
+    
 
     pub async fn send_data(&mut self, data: &[u8]) -> SessionResult<()> {
         info!("Sending data...");

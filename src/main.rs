@@ -3,6 +3,7 @@ use env_logger::{Builder, Target, WriteStyle};
 use log::{info, error, LevelFilter};
 use std::fs::File;
 use std::io::Write;
+use std::sync::Arc;
 use async_std::task;
 
 mod session;
@@ -14,8 +15,8 @@ pub struct Config {
     host: String,
     port: String,
     listen: bool, 
-    //input_buffer_size: usize,
-    //output_buffer_size: usize,
+    input_buffer_size: usize,
+    output_buffer_size: usize,
     // More in the future...
 }
 
@@ -65,7 +66,7 @@ fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
                 .long("in-buffer")
                 .value_name("SIZE")
                 .takes_value(true)
-                .default_value("0")
+                .default_value("1024")
                 .help("Sets the input buffer size. Application will quit after receiving this much data."),
         )
         .arg(
@@ -74,7 +75,7 @@ fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
                 .long("out-buffer")
                 .value_name("SIZE")
                 .takes_value(true)
-                .default_value("0")
+                .default_value("1024")
                 .help("Sets the output buffer size. Application will quit after sending this much data."),
         )
         .arg(
@@ -105,8 +106,8 @@ fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
 
     // Parse the buffer sizes, using default values if not specified
     // Since default values are provided in clap, these unwraps are safe
-    //let input_buffer_size: usize = matches.value_of("input-buffer").unwrap().parse().unwrap();
-    //let output_buffer_size: usize = matches.value_of("output-buffer").unwrap().parse().unwrap();
+    let input_buffer_size: usize = matches.value_of("input-buffer").unwrap().parse().unwrap();
+    let output_buffer_size: usize = matches.value_of("output-buffer").unwrap().parse().unwrap();
 
     // We'll retrieve the "extra" positional arguments here
     let extra_1 = matches.value_of("extra_1").map(|s| s.to_string());
@@ -137,8 +138,8 @@ fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
         host,
         port,
         listen,
-        //input_buffer_size,
-        //output_buffer_size,
+        input_buffer_size,
+        output_buffer_size,
         // + other fields?
     };
 
@@ -177,12 +178,12 @@ fn configure_logger(log_file_path: &Option<String>) -> Result<(), Box<dyn std::e
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse command-line arguments to build Config struct
-    let config = parse_args()?;
+    let config = Arc::new(parse_args()?);
 
-    info!("Starting session with config: {:?}", config);
+    info!("Starting session with config: {:?}", &config);
 
     // Start the session; block_on is used to run the async function synchronously
-    let result = task::block_on(session::start_session(&config));
+    let result = task::block_on(session::start_session(config));
     match result {
         Ok(_) => info!("Session ended successfully"),
         Err(e) => error!("Error during session: {}", e),

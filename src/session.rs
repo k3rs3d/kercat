@@ -52,15 +52,12 @@ async fn network_task(
 }
 
 // Entry function; spawns required async tasks
-pub async fn start_session(config: &Config) -> SessionResult<()> {
+pub async fn start_session(config: Arc<Config>) -> SessionResult<()> {
+    //let config = Arc::new(config);
     info!("Starting session with configuration: {:?}", config);
 
     // Creating a connection using the provided configuration
-    let connection = if config.listen {
-        Connection::listen(config).await?
-    } else {
-        Connection::from_config(config).await?
-    };
+    let connection = Connection::from_config(config).await?;
     let connection = Arc::new(Mutex::new(connection));
 
     info!("Connection created successfully.");
