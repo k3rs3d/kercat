@@ -1,14 +1,10 @@
-use async_std::channel;
-use async_std::io::{self, prelude::*};
-use async_std::sync::Mutex;
-use async_std::task;
+use async_std::{channel, task, sync::Mutex, io::{self, prelude::*}};
 use futures::future::FutureExt;
 use log::{error, info};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::connection::Connection;
-use crate::errors::{SessionError, SessionResult};
+use crate::errors::*;
 use crate::Config;
 
 // Asynchronous task that handles sending & receiving data over the network

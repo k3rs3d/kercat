@@ -1,8 +1,5 @@
-use std::fmt;
-use std::error::Error as StdError;
-use std::sync::mpsc;
-use async_std::io;
-use async_std::channel::SendError;
+use std::{error, fmt, sync::mpsc};
+use async_std::{io, channel::SendError};
 
 // Custom result type definition
 pub type SessionResult<T> = Result<T, SessionError>;
@@ -19,9 +16,9 @@ pub enum SessionError {
 
 // Implement the StdError trait to ensure compatibility with 
 // standard error handling mechanisms (e.g. "?")
-impl StdError for SessionError {
+impl error::Error for SessionError {
     // Implementing source() allows error-chaining
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             SessionError::IoError(err) => Some(err),
             SessionError::ChannelRecvError(err) => Some(err),
