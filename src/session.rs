@@ -56,7 +56,11 @@ pub async fn start_session(config: &Config) -> SessionResult<()> {
     info!("Starting session with configuration: {:?}", config);
 
     // Creating a connection using the provided configuration
-    let connection = Connection::from_config(config).await?;
+    let connection = if config.listen {
+        Connection::listen(config).await?
+    } else {
+        Connection::from_config(config).await?
+    };
     let connection = Arc::new(Mutex::new(connection));
 
     info!("Connection created successfully.");
