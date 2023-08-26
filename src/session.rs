@@ -125,8 +125,8 @@ pub async fn start_session(config: &Config) -> SessionResult<()> {
     // Await both the user input and network tasks to complete
     // HACK: Makes warning go away
     // TODO: Close the connection with connection.close()
-    let network_result = network_handle.await;
-    let _ = input_task.await?;
+    let network_result = futures::try_join!(network_handle, input_task);
+    //let _ = input_task.await?;
 
     // Check for an exit signal from the network task
     match network_result {
