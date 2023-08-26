@@ -1,7 +1,8 @@
 use std::fmt;
 use std::error::Error as StdError;
-use async_std::io;
 use std::sync::mpsc;
+use async_std::io;
+use async_std::channel::SendError;
 
 // Custom result type definition
 pub type SessionResult<T> = Result<T, SessionError>;
@@ -70,11 +71,16 @@ impl From<Box<dyn std::error::Error + Send>> for SessionError {
     }
 }
 
+// Conversion from async_std::channel::SendError for String type
+impl From<SendError<String>> for SessionError {
+    fn from(err: SendError<String>) -> Self {
+        SessionError::Custom(format!("Channel send error: {}", err))
+    }
+}
+
 // Conversion from String, to convert simple error messages
 impl From<String> for SessionError {
     fn from(err: String) -> Self {
         SessionError::Custom(err)
     }
 }
-
-

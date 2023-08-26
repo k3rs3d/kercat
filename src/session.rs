@@ -15,7 +15,6 @@ use crate::Config;
 async fn network_task(
     connection: Arc<Mutex<Connection>>, // Shared state for the connection
     input_receiver: channel::Receiver<String>, // Receiver end for user inputs
-    should_exit: Arc<AtomicBool>,       // Exit signal to break the loop
 ) -> SessionResult<()> {
     loop {
         // Concurrently await input & network
@@ -48,29 +47,17 @@ async fn network_task(
                     },
                     Err(e) => {
                         error!("Error receiving data: {:?}", e);
-                        should_exit.store(true, Ordering::SeqCst);  // Set exit flag
                         return Err(e.into());  // Propagate error back
                     },
                 }
             },
         }
-
-        // Condition for breaking the loop. Checked after every network operation
-        if should_exit.load(Ordering::SeqCst) {
-            break;
-        }
     }
-
-    Ok(())
 }
 
 // Entry function; spawns required async tasks
 pub async fn start_session(config: &Config) -> SessionResult<()> {
     info!("Starting session with configuration: {:?}", config);
-
-    // Use atomic bool for non-blocking state sharing across async tasks.
-    let should_exit = Arc::new(AtomicBool::new(false));
-    let should_exit_for_input = should_exit.clone(); // Clone for the input task
 
     // Creating a connection using the provided configuration
     let connection = Connection::from_config(config).await?;
@@ -86,40 +73,22 @@ pub async fn start_session(config: &Config) -> SessionResult<()> {
         loop {
             // Prompt for user input - remove?
             print!("> ");
-            match io::stdout().flush().await {
-                Ok(_) => (),
-                Err(e) => error!("Error flushing stdout: {:?}", e),
-            }
+            io::stdout().flush().await?;
 
             // Read user input from stdin
             let mut input = String::new();
-            match io::stdin().read_line(&mut input).await {
-                Ok(_) => info!("Received user input: {:?}", input),
-                Err(e) => error!("Error reading line: {:?}", e),
-            }
+            io::stdin().read_line(&mut input).await?;
 
             // Send the user input to the network_task
-            match input_sender.send(input).await {
-                Ok(_) => (),
-                Err(e) => error!("Error sending user input to network task: {:?}", e),
-            }
-
-            // Check for an exit signal from the network task
-            if should_exit_for_input.load(Ordering::SeqCst) {
-                // Using the clone here
-                break;
-            }
+            input_sender.send(input).await?;
         }
-
         Ok::<(), SessionError>(())
     });
 
     // Spawn a task to handle network communication (both sending and receiving)
-    let should_exit_for_network = should_exit.clone(); // Clone for the network task
     let network_handle = task::spawn(network_task(
         connection,
         input_receiver,
-        should_exit_for_network,
     ));
 
     // Await both the user input and network tasks to complete
