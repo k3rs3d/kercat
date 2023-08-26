@@ -55,13 +55,6 @@ impl From<mpsc::RecvError> for SessionError {
 }
 
 // General-purpose conversion for boxed Error types
-impl From<Box<dyn std::error::Error>> for SessionError {
-    fn from(err: Box<dyn std::error::Error>) -> Self {
-        SessionError::Custom(err.to_string())
-    }
-}
-
-// Handles boxed Error types that also implement Send
 impl From<Box<dyn std::error::Error + Send>> for SessionError {
     fn from(err: Box<dyn std::error::Error + Send>) -> Self {
         SessionError::Custom(err.to_string())
