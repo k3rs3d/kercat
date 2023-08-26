@@ -64,6 +64,13 @@ pub fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
                 .help("Sets the output buffer size. Application will quit after sending this much data."),
         )
         .arg(
+            Arg::new("ignore_eof")
+            .short('F')
+            .long("ignore-eof")
+            .value_name("IGNORE_EOF")
+            .help("Do not close network socket for writing after seeing EOF.")
+        )
+        .arg(
             Arg::new("extra_1")
                 .index(1)
                 .value_name("EXTRA_1")
@@ -83,6 +90,8 @@ pub fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
 
     // Determine the operating mode
     let listen = matches.is_present("listen");
+
+    let ignore_eof = matches.is_present("ignore_eof");
 
     // DEBUG ?
     // Configure the logger based on provided log file path, if any
@@ -125,6 +134,7 @@ pub fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
         listen,
         input_buffer_size,
         output_buffer_size,
+        ignore_eof,
         // + other fields?
     };
 

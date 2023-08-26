@@ -1,6 +1,11 @@
-use async_std::{channel, task, sync::Mutex, io::{self, prelude::*}};
+use async_std::{
+    channel,
+    io::{self, prelude::*},
+    sync::Mutex,
+    task,
+};
 use futures::future::FutureExt;
-use log::{error, info};
+use log::{error, debug, info};
 use std::sync::Arc;
 
 use crate::connection::Connection;
@@ -27,7 +32,12 @@ async fn network_task(
                             Err(e) => error!("Error sending data: {:?}", e),
                         }
                     },
-                    Err(_) => error!("Error receiving from channel")
+                    Err(_) => {
+                        info!("Input channel has been closed; terminating connection.");
+                        let mut connection = connection.lock().await; // Lock
+                        connection.close().await?; // Close the connection
+                        return Ok(());  // Terminate the loop, ending the network_task
+                    },
                 }
             },
 
@@ -53,10 +63,10 @@ async fn network_task(
 
 // Entry function; spawns required async tasks
 pub async fn start_session(config: Arc<Config>) -> SessionResult<()> {
-    //let config = Arc::new(config);
     info!("Starting session with configuration: {:?}", config);
 
     // Creating a connection using the provided configuration
+    let config_clone = config.clone(); // For the task 
     let connection = Connection::from_config(config).await?;
     let connection = Arc::new(Mutex::new(connection));
 
@@ -74,7 +84,17 @@ pub async fn start_session(config: Arc<Config>) -> SessionResult<()> {
 
             // Read user input from stdin
             let mut input = String::new();
-            io::stdin().read_line(&mut input).await?;
+            let bytes_read = io::stdin().read_line(&mut input).await?;
+
+            // Check for EoF
+            if bytes_read == 0 {
+                if config_clone.ignore_eof { // used cloned config
+                    debug!("EOF detected on stdin but ignoring due to config: {:?}", config_clone);
+                    continue;
+                }
+                info!("EOF detected on stdin. Closing connection...");
+                break;
+            }
 
             // Send the user input to the network_task
             input_sender.send(input).await?;
@@ -83,10 +103,7 @@ pub async fn start_session(config: Arc<Config>) -> SessionResult<()> {
     });
 
     // Spawn a task to handle network communication (both sending and receiving)
-    let network_handle = task::spawn(network_task(
-        connection,
-        input_receiver,
-    ));
+    let network_handle = task::spawn(network_task(connection, input_receiver));
 
     // Await both the user input and network tasks to complete
     // HACK: Makes warning go away
@@ -100,7 +117,7 @@ pub async fn start_session(config: Arc<Config>) -> SessionResult<()> {
         Err(e) => {
             error!("Session terminated due to: {:?}", e);
             return Err(e);
-        },
+        }
     }
 
     info!("Session ended successfully.");

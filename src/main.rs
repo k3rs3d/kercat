@@ -14,6 +14,7 @@ pub struct Config {
     listen: bool, 
     input_buffer_size: usize,
     output_buffer_size: usize,
+    ignore_eof: bool,
     // More in the future...
 }
 

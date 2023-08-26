@@ -66,7 +66,6 @@ impl Connection {
         }
     }
     
-
     pub async fn send_data(&mut self, data: &[u8]) -> SessionResult<()> {
         info!("Sending data...");
         self.stream
