@@ -185,7 +185,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let result = task::block_on(session::start_session(&config));
     match result {
         Ok(_) => info!("Session ended successfully"),
-        Err(e) => error!("An error occurred during the session: {}", e),
+        Err(e) => error!("Error during session: {}", e),
     }
 
     Ok(())

@@ -2,20 +2,20 @@ use async_std::channel;
 use async_std::io::{self, prelude::*};
 use async_std::sync::Mutex;
 use async_std::task;
+use futures::future::FutureExt;
 use log::{error, info};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use futures::future::FutureExt;
 
-use crate::errors::{SessionError,SessionResult};
 use crate::connection::Connection;
+use crate::errors::{SessionError, SessionResult};
 use crate::Config;
 
-// Asynchronous task that handles sending & receiving data over the network 
+// Asynchronous task that handles sending & receiving data over the network
 async fn network_task(
     connection: Arc<Mutex<Connection>>, // Shared state for the connection
     input_receiver: channel::Receiver<String>, // Receiver end for user inputs
-    should_exit: Arc<AtomicBool>, // Exit signal to break the loop
+    should_exit: Arc<AtomicBool>,       // Exit signal to break the loop
 ) -> SessionResult<()> {
     loop {
         // Concurrently await input & network
@@ -43,10 +43,14 @@ async fn network_task(
             }.fuse() => {
                 match received_result {
                     Ok(data) => {
-                        println!("{}", data); // Display received data immediately 
+                        println!("{}", data); // Display received data immediately
                         info!("Received data: {}", data);
                     },
-                    Err(e) => error!("Error receiving data: {:?}", e),
+                    Err(e) => {
+                        error!("Error receiving data: {:?}", e);
+                        should_exit.store(true, Ordering::SeqCst);  // Set exit flag
+                        return Err(e.into());  // Propagate error back
+                    },
                 }
             },
         }
@@ -80,7 +84,7 @@ pub async fn start_session(config: &Config) -> SessionResult<()> {
     // Spawn a task to handle user input
     let input_task = task::spawn(async move {
         loop {
-            // Prompt for user input - remove? 
+            // Prompt for user input - remove?
             print!("> ");
             match io::stdout().flush().await {
                 Ok(_) => (),
@@ -101,7 +105,8 @@ pub async fn start_session(config: &Config) -> SessionResult<()> {
             }
 
             // Check for an exit signal from the network task
-            if should_exit_for_input.load(Ordering::SeqCst) { // Using the clone here
+            if should_exit_for_input.load(Ordering::SeqCst) {
+                // Using the clone here
                 break;
             }
         }
@@ -111,17 +116,25 @@ pub async fn start_session(config: &Config) -> SessionResult<()> {
 
     // Spawn a task to handle network communication (both sending and receiving)
     let should_exit_for_network = should_exit.clone(); // Clone for the network task
-    let network_handle = task::spawn(network_task(connection, input_receiver, should_exit_for_network));
+    let network_handle = task::spawn(network_task(
+        connection,
+        input_receiver,
+        should_exit_for_network,
+    ));
 
     // Await both the user input and network tasks to complete
     // HACK: Makes warning go away
     // TODO: Close the connection with connection.close()
-    let _ = network_handle.await?;
+    let network_result = network_handle.await;
     let _ = input_task.await?;
 
-    // Check for an exit signal from network task
-    if should_exit.load(Ordering::SeqCst) {
-        return Err(SessionError::Custom("Connection closed by the server, session terminated.".to_string()));
+    // Check for an exit signal from the network task
+    match network_result {
+        Ok(_) => info!("Session ended successfully."),
+        Err(e) => {
+            error!("Session terminated due to: {:?}", e);
+            return Err(e);
+        },
     }
 
     info!("Session ended successfully.");
