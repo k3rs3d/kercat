@@ -52,7 +52,7 @@ impl Connection {
             
             if bytes_read == 0 {
                 error!("Connection closed by the peer");
-                return Err(SessionError::Custom("Connection closed by peer".into()));
+                return Err(SessionError::ClientDisconnected);
             }
             
             total_data.extend_from_slice(&buffer[..bytes_read]);

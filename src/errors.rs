@@ -9,6 +9,8 @@ pub type SessionResult<T> = Result<T, SessionError>;
 pub enum SessionError {
     IoError(io::Error), // IoError wraps async I/O errors (for network & file operations)
     ChannelRecvError(mpsc::RecvError),
+    ClientDisconnected,
+    TimeoutError,
     // + Other error types?
     // Custom error serves as a catch-all
     Custom(String),
@@ -34,6 +36,8 @@ impl fmt::Display for SessionError {
         match self {
             SessionError::IoError(err) => write!(f, "I/O error: {}", err),
             SessionError::ChannelRecvError(err) => write!(f, "Channel receive error: {}", err),
+            SessionError::ClientDisconnected => write!(f, "Client disconnected"), 
+            SessionError::TimeoutError => write!(f, "Timeout"), 
             SessionError::Custom(msg) => write!(f, "Custom error: {}", msg),
         }
     }
