@@ -12,6 +12,7 @@ pub struct Config {
     host: String,
     port: String,
     listen: bool, 
+    keep_listening: bool,
     input_buffer_size: usize,
     output_buffer_size: usize,
     ignore_eof: bool,

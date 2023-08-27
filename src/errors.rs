@@ -61,9 +61,9 @@ impl From<Box<dyn std::error::Error + Send>> for SessionError {
     }
 }
 
-// Conversion from async_std::channel::SendError for String type
-impl From<SendError<String>> for SessionError {
-    fn from(err: SendError<String>) -> Self {
+// Conversion from async_std::channel::SendError for u8 type
+impl From<SendError<Vec<u8>>> for SessionError {
+    fn from(err: SendError<Vec<u8>>) -> Self {
         SessionError::Custom(format!("Channel send error: {}", err))
     }
 }

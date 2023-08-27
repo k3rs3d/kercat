@@ -42,7 +42,7 @@ impl Connection {
         Ok(Connection { stream, config })
     }    
 
-    pub async fn receive_data(&mut self) -> SessionResult<String> {
+    pub async fn receive_data(&mut self) -> SessionResult<Vec<u8>> {
         info!("Receiving data...");
         let mut buffer = vec![0u8; self.config.input_buffer_size];
         let mut total_data = Vec::new();
@@ -61,7 +61,7 @@ impl Connection {
             if let Some(pos) = total_data.iter().position(|&b| b == b'\n') {
                 let received = std::str::from_utf8(&total_data[..pos])
                     .map_err(|e| SessionError::Custom(e.to_string()))?;
-                return Ok(received.to_string());
+                return Ok(total_data);
             }
         }
     }

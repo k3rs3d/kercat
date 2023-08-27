@@ -68,7 +68,14 @@ pub fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
             .short('F')
             .long("ignore-eof")
             .value_name("IGNORE_EOF")
-            .help("Do not close network socket for writing after seeing EOF.")
+            .help("Do not close network socket for writing after seeing EOF."),
+        )
+        .arg(
+            Arg::new("keep_listening")
+            .short('k')
+            .long("keep-listening")
+            .value_name("KEEP_LISTENING")
+            .help("Do not close network socket for listening after client disconnection (-l mode only).")
         )
         .arg(
             Arg::new("extra_1")
@@ -91,6 +98,7 @@ pub fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
     // Determine the operating mode
     let listen = matches.is_present("listen");
 
+    let keep_listening = matches.is_present("keep_listening");
     let ignore_eof = matches.is_present("ignore_eof");
 
     // DEBUG ?
@@ -132,6 +140,7 @@ pub fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
         host,
         port,
         listen,
+        keep_listening,
         input_buffer_size,
         output_buffer_size,
         ignore_eof,

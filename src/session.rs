@@ -15,7 +15,7 @@ use crate::Config;
 // Asynchronous task that handles sending & receiving data over the network
 async fn network_task(
     connection: Arc<Mutex<Connection>>, // Shared state for the connection
-    input_receiver: channel::Receiver<String>, // Receiver end for user inputs
+    input_receiver: channel::Receiver<Vec<u8>>, // Receiver end for user inputs
 ) -> SessionResult<()> {
     loop {
         // Concurrently await input & network
@@ -27,7 +27,7 @@ async fn network_task(
                         info!("Received input from user, attempting to send data.");
                         let mut connection = connection.lock().await; // Lock
                         // Send user input to the remote connection
-                        match connection.send_data(input.as_bytes()).await {
+                        match connection.send_data(&input).await {
                             Ok(_) => info!("User input sent to remote connection"),
                             Err(e) => error!("Error sending data: {:?}", e),
                         }
@@ -48,8 +48,8 @@ async fn network_task(
             }.fuse() => {
                 match received_result {
                     Ok(data) => {
-                        println!("{}", data); // Display received data immediately
-                        info!("Received data: {}", data);
+                        println!("{:?}", data); // Display received data immediately
+                        info!("Received data: {:?}", data);
                     },
                     Err(e) => {
                         error!("Error receiving data: {:?}", e);
@@ -73,7 +73,7 @@ pub async fn start_session(config: Arc<Config>) -> SessionResult<()> {
     info!("Connection created successfully.");
 
     // Create a channel to communicate between input &  sending tasks
-    let (input_sender, input_receiver) = channel::unbounded();
+    let (input_sender, input_receiver) = channel::unbounded::<Vec<u8>>();
 
     // Spawn a task to handle user input
     let input_task = task::spawn(async move {
@@ -83,8 +83,8 @@ pub async fn start_session(config: Arc<Config>) -> SessionResult<()> {
             io::stdout().flush().await?;
 
             // Read user input from stdin
-            let mut input = String::new();
-            let bytes_read = io::stdin().read_line(&mut input).await?;
+            let mut input = vec![0u8; 1024]; // TODO: configurable buffer size
+            let bytes_read = io::stdin().read(&mut input).await?;
 
             // Check for EoF
             if bytes_read == 0 {
@@ -96,6 +96,7 @@ pub async fn start_session(config: Arc<Config>) -> SessionResult<()> {
                 break;
             }
 
+            input.truncate(bytes_read); // Truncate buffer to actual size
             // Send the user input to the network_task
             input_sender.send(input).await?;
         }
