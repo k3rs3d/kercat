@@ -2,8 +2,10 @@ use crate::errors::{SessionError, SessionResult};
 use crate::Config;
 use async_std::{
     io::prelude::*,
-    net::{TcpListener, TcpStream},
+    net::{SocketAddr, TcpListener, TcpStream},
 };
+use async_std_resolver::config::{ResolverConfig, ResolverOpts};
+use trust_dns_resolver::Resolver; // TODO: Figure out async DNS
 use std::sync::Arc;
 use log::{error, info};
 
@@ -13,11 +15,13 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub async fn from_config(config: Arc<Config>) -> SessionResult<Self> {
+    pub async fn from_config(config: Arc<Config>, address: SocketAddr) -> SessionResult<Self> {
+        // TODO: Implement "dont_resolve" flag (skips DNS)
+        let address = Self::resolve_hostname(address)?;
+
         if config.listen {
-            Self::listen(config).await
+            Self::listen(config, address).await
         } else {
-            let address = format!("{}:{}", config.host, config.port);
             info!("Connecting to {}", address);
             let stream = TcpStream::connect(&address)
                 .await
@@ -29,8 +33,7 @@ impl Connection {
         }
     }
 
-    pub async fn listen(config: Arc<Config>) -> SessionResult<Self> {
-        let address = format!("{}:{}", config.host, config.port);
+    pub async fn listen(config: Arc<Config>, address: SocketAddr) -> SessionResult<Self> {
         info!("Listening on {}", address);
         let listener = TcpListener::bind(&address)
             .await
@@ -85,4 +88,22 @@ impl Connection {
             .map_err(SessionError::from)?;
         Ok(())
     }
+
+    fn resolve_hostname(address: SocketAddr) -> Result<SocketAddr, std::io::Error> {
+        if address.ip().is_unspecified() {
+            let resolver = Resolver::new(ResolverConfig::default(), ResolverOpts::default())?;
+            let lookup_result = resolver.lookup_ip(address.ip().to_string().as_str())?;
+            
+            if let Some(first_resolved_ip) = lookup_result.iter().next() {
+                return Ok(SocketAddr::new(first_resolved_ip, address.port()));
+            } else {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "No IPs resolved from the given hostname",
+                ));
+            }
+        }
+        Ok(address)
+    }
+    
 }

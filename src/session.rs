@@ -6,7 +6,7 @@ use async_std::{
 };
 use futures::future::{Fuse, FutureExt};
 use log::{debug, error, info};
-use std::{sync::Arc, pin::Pin}; 
+use std::{pin::Pin, sync::Arc};
 
 use crate::connection::Connection;
 use crate::errors::*;
@@ -108,25 +108,52 @@ pub async fn start_session(config: Arc<Config>) -> SessionResult<()> {
     let (input_sender, input_receiver) = channel::unbounded::<Vec<u8>>();
 
     // Spawn a task to handle user input and make it a FusedFuture
-    let mut input_task: Pin<Box<Fuse<_>>> = Box::pin(task::spawn(input_task(input_sender, config_clone.clone())).fuse());
+    let mut input_task: Pin<Box<Fuse<_>>> =
+        Box::pin(task::spawn(input_task(input_sender, config.clone())).fuse());
 
+    let mut network_handle: Option<Pin<Box<Fuse<_>>>> = None;
 
-    loop {
-        let connection = Connection::from_config(config_clone.clone()).await?;
-        let connection = Arc::new(Mutex::new(connection));
+    for socket_address in &config_clone.addresses {
+        let mut temp_handle = network_handle.take(); // Take ownership and set network_handle to None
 
-        // Spawn a task to handle network communication (both sending and receiving)
-        let mut network_handle: Pin<Box<Fuse<_>>> = Box::pin(task::spawn(network_task(connection, input_receiver.clone())).fuse());
-
-        // Await both the user input and network tasks to complete
-        let _network_result = futures::select! {
-        res = network_handle => res,
-        _ = input_task => {
-            continue;
+        if let Some(mut handle) = temp_handle {
+            match handle.await {
+                Ok(_) => {
+                    info!("Connection to {} was successful.", socket_address);
+                }
+                Err(e) => {
+                    error!(
+                        "Connection to {} failed with error: {:?}, proceeding to next address.",
+                        socket_address, e
+                    );
+                }
+            }
         }
-    };
+
+        match Connection::from_config(config_clone.clone(), *socket_address).await {
+            Ok(connection) => {
+                let connection = Arc::new(Mutex::new(connection));
+    
+                // Spawn a task to handle network communication (both sending and receiving)
+                temp_handle = Some(Box::pin(
+                    task::spawn(network_task(connection, input_receiver.clone())).fuse(),
+                ));
+                network_handle = temp_handle; // Give ownership back to network_handle for the next loop iteration
+            }
+            Err(e) => {
+                error!(
+                    "Failed to initialize connection to {}: {:?}, proceeding to next address.",
+                    socket_address, e
+                );
+                continue; // Skip the rest of this iteration and proceed to the next address
+            }
+        }
     }
 
-    //info!("Session ended successfully.");
-    //Ok(())
+    // Wait for the last network task to finish, if there is one
+    if let Some(handle) = network_handle {
+        handle.await?;
+    }
+
+    Ok(())
 }
