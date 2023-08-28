@@ -79,6 +79,12 @@ pub fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
             .help("Do not close network socket for listening after client disconnection (-l mode only).")
         )
         .arg(
+            Arg::new("ignore_dns")
+            .short('n')
+            .long("no-dns")
+            .help("Do not do any DNS or service lookups on any specified addresses, hostnames or ports.",
+        )) 
+        .arg(
             Arg::new("ipv4_only")
             .short('4')
             .long("ipv4-only")
@@ -117,6 +123,7 @@ pub fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
 
     let keep_listening = matches.is_present("keep_listening");
     let ignore_eof = matches.is_present("ignore_eof");
+    let ignore_dns = matches.is_present("ignore_dns");
 
     // Determine the address type
     let addr_type = if matches.is_present("ipv4_only") {
@@ -173,6 +180,7 @@ pub fn parse_args() -> Result<Config, Box<dyn std::error::Error>> {
         input_buffer_size,
         output_buffer_size,
         ignore_eof,
+        ignore_dns,
         // + other fields?
     };
 

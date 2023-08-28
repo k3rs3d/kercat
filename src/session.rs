@@ -14,7 +14,7 @@ use crate::Config;
 
 // Asynchronous task that handles sending & receiving data over the network
 async fn network_task(
-    connection: Arc<Mutex<Connection>>, // Shared state for the connection
+    connection: Arc<Connection>, // Shared state for the connection
     input_receiver: channel::Receiver<Vec<u8>>, // Receiver end for user inputs
 ) -> SessionResult<()> {
     loop {
@@ -25,7 +25,6 @@ async fn network_task(
                 match input_result {
                     Ok(input) => {
                         info!("Received input from user, attempting to send data.");
-                        let mut connection = connection.lock().await; // Lock
                         // Send user input to the remote connection
                         match connection.send_data(&input).await {
                             Ok(_) => info!("User input sent to remote connection"),
@@ -34,7 +33,6 @@ async fn network_task(
                     },
                     Err(_) => {
                         info!("Input channel has been closed; terminating connection.");
-                        let mut connection = connection.lock().await; // Lock
                         connection.close().await?; // Close the connection
                         return Ok(());  // Terminate the loop, ending the network_task
                     },
@@ -43,8 +41,7 @@ async fn network_task(
 
             // Wait for a message from the network
             received_result = async {
-                let mut connection_lock = connection.lock().await; // Lock
-                connection_lock.receive_data().await
+                connection.receive_data().await
             }.fuse() => {
                 match received_result {
                     Ok(data) => {
@@ -132,7 +129,7 @@ pub async fn start_session(config: Arc<Config>) -> SessionResult<()> {
 
         match Connection::from_config(config_clone.clone(), *socket_address).await {
             Ok(connection) => {
-                let connection = Arc::new(Mutex::new(connection));
+                let connection = Arc::new(connection);
     
                 // Spawn a task to handle network communication (both sending and receiving)
                 temp_handle = Some(Box::pin(

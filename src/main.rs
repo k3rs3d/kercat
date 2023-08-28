@@ -16,6 +16,7 @@ pub struct Config {
     input_buffer_size: usize,
     output_buffer_size: usize,
     ignore_eof: bool,
+    ignore_dns: bool,
     // More in the future...
 }
 
